@@ -1,89 +1,92 @@
-import os
+from contextlib import contextmanager
+from collections.abc import Generator
+from types import TracebackType
 
-from dotenv import load_dotenv
-from neo4j import Driver, GraphDatabase
+from neo4j import Driver, GraphDatabase, Session
 
-
-# Load environment variables from .env
-load_dotenv()
-
-
-NEO4J_URI = os.getenv("NEO4J_URI")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")
+from src.config.settings import settings
 
 
-def validate_configuration() -> None:
-    """Ensure all required Neo4j configuration values are available."""
-    required = {
-        "NEO4J_URI": NEO4J_URI,
-        "NEO4J_USERNAME": NEO4J_USERNAME,
-        "NEO4J_PASSWORD": NEO4J_PASSWORD,
-        "NEO4J_DATABASE": NEO4J_DATABASE,
-    }
+class Neo4jConnection:
+    """
+    Manages the connection between Project Oracle and Neo4j.
 
-    missing = [key for key, value in required.items() if not value]
-
-    if missing:
-        raise RuntimeError(
-            f"Missing Neo4j configuration: {', '.join(missing)}"
-        )
-
-
-def create_driver() -> Driver:
-    """Create and verify the Neo4j database driver."""
-    validate_configuration()
-
-    driver = GraphDatabase.driver(
-        NEO4J_URI,
-        auth=(NEO4J_USERNAME, NEO4J_PASSWORD),
-    )
-
-    driver.verify_connectivity()
-
-    return driver
-
-
-def create_project_node(driver: Driver, project_name: str) -> dict:
-    """Create the Project node if it does not already exist."""
-
-    query = """
-    MERGE (p:Project {name: $name})
-    RETURN
-        elementId(p) AS id,
-        p.name AS name
+    The class owns a single Neo4j driver and provides sessions
+    for database operations.
     """
 
-    with driver.session(database=NEO4J_DATABASE) as session:
-        record = session.execute_write(
-            lambda tx: tx.run(query, name=project_name).single()
+    def __init__(self) -> None:
+        self._driver: Driver = GraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(
+                settings.neo4j_username,
+                settings.neo4j_password,
+            ),
         )
+        self._closed = False
 
-    if record is None:
-        raise RuntimeError("Neo4j did not return the created Project node.")
+    def verify_connectivity(self) -> None:
+        """
+        Verify that Neo4j is reachable using the configured credentials.
 
-    return dict(record)
+        Raises:
+            RuntimeError: If this connection has already been closed.
+            Exception: If Neo4j cannot be reached or authentication fails.
+        """
+        self._ensure_open()
+        self._driver.verify_connectivity()
+
+    @contextmanager
+    def session(self) -> Generator[Session, None, None]:
+        """
+        Provide a Neo4j session for database operations.
+        """
+        self._ensure_open()
+        with self._driver.session(
+            database=settings.neo4j_database
+        ) as session:
+            yield session
+
+    def _ensure_open(self) -> None:
+        """Ensure the connection has not been closed."""
+        if self._closed:
+            raise RuntimeError("Neo4j connection is closed.")
+
+    def close(self) -> None:
+        """
+        Close the Neo4j driver and release its resources.
+        """
+        if self._closed:
+            return
+
+        self._driver.close()
+        self._closed = True
+
+    def __enter__(self) -> "Neo4jConnection":
+        self._ensure_open()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.close()
 
 
-def main() -> None:
-    """Application entry point."""
+def create_neo4j_connection() -> Neo4jConnection:
+    """
+    Create and verify a Neo4j connection for Project Oracle.
 
-    driver = create_driver()
-
+    Returns:
+        A verified Neo4jConnection instance.
+    """
+    connection = Neo4jConnection()
     try:
-        project = create_project_node(
-            driver,
-            project_name="Project Oracle",
-        )
+        connection.verify_connectivity()
+    except Exception:
+        connection.close()
+        raise
 
-        print("Neo4j connection successful.")
-        print(f"Project node: {project['name']}")
-        print(f"Node ID: {project['id']}")
-
-    finally:
-        driver.close()
-
-
-if __name__ == "__main__":
-    main()
+    return connection
