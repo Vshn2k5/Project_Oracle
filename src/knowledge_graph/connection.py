@@ -1,10 +1,20 @@
+"""
+Neo4j connection management for Project Oracle.
+
+The connection is created with explicit ``Settings`` — it does not read
+global state.  Both write and read sessions are supported.
+"""
+
+import logging
 from contextlib import contextmanager
 from collections.abc import Generator
 from types import TracebackType
 
 from neo4j import Driver, GraphDatabase, Session
 
-from src.config.settings import settings
+from src.config.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class Neo4jConnection:
@@ -13,9 +23,13 @@ class Neo4jConnection:
 
     The class owns a single Neo4j driver and provides sessions
     for database operations.
+
+    Args:
+        settings: Application configuration containing Neo4j credentials.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
         self._driver: Driver = GraphDatabase.driver(
             settings.neo4j_uri,
             auth=(
@@ -24,6 +38,7 @@ class Neo4jConnection:
             ),
         )
         self._closed = False
+        logger.info("Neo4j driver created for %s.", settings.neo4j_uri)
 
     def verify_connectivity(self) -> None:
         """
@@ -35,6 +50,7 @@ class Neo4jConnection:
         """
         self._ensure_open()
         self._driver.verify_connectivity()
+        logger.info("Neo4j connectivity verified.")
 
     @contextmanager
     def session(self) -> Generator[Session, None, None]:
@@ -43,7 +59,7 @@ class Neo4jConnection:
         """
         self._ensure_open()
         with self._driver.session(
-            database=settings.neo4j_database
+            database=self._settings.neo4j_database
         ) as session:
             yield session
 
@@ -61,6 +77,7 @@ class Neo4jConnection:
 
         self._driver.close()
         self._closed = True
+        logger.info("Neo4j connection closed.")
 
     def __enter__(self) -> "Neo4jConnection":
         self._ensure_open()
@@ -75,14 +92,17 @@ class Neo4jConnection:
         self.close()
 
 
-def create_neo4j_connection() -> Neo4jConnection:
+def create_neo4j_connection(settings: Settings) -> Neo4jConnection:
     """
     Create and verify a Neo4j connection for Project Oracle.
+
+    Args:
+        settings: Application configuration containing Neo4j credentials.
 
     Returns:
         A verified Neo4jConnection instance.
     """
-    connection = Neo4jConnection()
+    connection = Neo4jConnection(settings)
     try:
         connection.verify_connectivity()
     except Exception:

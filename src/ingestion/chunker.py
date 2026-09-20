@@ -1,19 +1,26 @@
 import hashlib
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from src.ingestion.text_cleaner import CleanedDocument, CleanedPage
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class DocumentChunk:
     """
     Represents one retrieval-ready chunk of a source document.
+
+    ``source_path`` preserves full provenance so any chunk can be traced
+    back to its originating file on disk.
     """
 
     chunk_id: str
     document_id: str
+    source_path: str
     page_number: int
     chunk_index: int
     text: str
@@ -84,6 +91,13 @@ class DocumentChunker:
             )
 
         document_id = self.create_document_id(document.source_path)
+        source_path = str(document.source_path)
+
+        logger.info(
+            "Chunking document %s (%d pages).",
+            document_id,
+            document.page_count,
+        )
 
         chunks: list[DocumentChunk] = []
         chunk_index = 0
@@ -100,6 +114,7 @@ class DocumentChunker:
                             f"C{chunk_index:04d}"
                         ),
                         document_id=document_id,
+                        source_path=source_path,
                         page_number=page.page_number,
                         chunk_index=chunk_index,
                         text=text,
@@ -107,6 +122,10 @@ class DocumentChunker:
                 )
 
                 chunk_index += 1
+
+        logger.info(
+            "Produced %d chunks for document %s.", len(chunks), document_id,
+        )
 
         return tuple(chunks)
 
