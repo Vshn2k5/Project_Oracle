@@ -48,6 +48,15 @@ class Settings:
     neo4j_password: str = field(repr=False)
     neo4j_database: str = "neo4j"
 
+    # LLM Configuration
+    llm_provider: str = "google-genai"
+    llm_model: str = "gemini-2.5-flash"
+    llm_api_key: str | None = field(default=None, repr=False)
+
+    # Embedding Configuration
+    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_dimension: int = 384
+
     @classmethod
     def from_environment(cls) -> "Settings":
         """
@@ -69,4 +78,9 @@ class Settings:
             neo4j_username=_get_required_env("NEO4J_USERNAME"),
             neo4j_password=_get_required_env("NEO4J_PASSWORD"),
             neo4j_database=os.getenv("NEO4J_DATABASE", "neo4j").strip(),
+            llm_provider=os.getenv("LLM_PROVIDER", "google-genai").strip(),
+            llm_model=os.getenv("LLM_MODEL", "gemini-2.5-flash").strip(),
+            llm_api_key=os.getenv("LLM_API_KEY", "").strip() or None,
+            embedding_model=os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2").strip(),
+            embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "384").strip()),
         )

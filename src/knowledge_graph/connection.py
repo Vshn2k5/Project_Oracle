@@ -10,11 +10,15 @@ from contextlib import contextmanager
 from collections.abc import Generator
 from types import TracebackType
 
-from neo4j import Driver, GraphDatabase, Session
+from neo4j import Driver, GraphDatabase, Session, READ_ACCESS
 
 from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+class DatabaseConnectionError(RuntimeError):
+    """Raised when a Neo4j connection cannot be established or verified."""
 
 
 class Neo4jConnection:
@@ -46,20 +50,46 @@ class Neo4jConnection:
 
         Raises:
             RuntimeError: If this connection has already been closed.
-            Exception: If Neo4j cannot be reached or authentication fails.
+            DatabaseConnectionError: If Neo4j cannot be reached or
+                authentication fails.
         """
         self._ensure_open()
-        self._driver.verify_connectivity()
+        try:
+            self._driver.verify_connectivity()
+        except Exception as exc:
+            raise DatabaseConnectionError(
+                f"Cannot connect to Neo4j at {self._settings.neo4j_uri}."
+            ) from exc
         logger.info("Neo4j connectivity verified.")
 
     @contextmanager
     def session(self) -> Generator[Session, None, None]:
         """
-        Provide a Neo4j session for database operations.
+        Provide a Neo4j session for database operations (default mode).
         """
         self._ensure_open()
+        logger.debug("Opening Neo4j session (database=%s).", self._settings.neo4j_database)
         with self._driver.session(
             database=self._settings.neo4j_database
+        ) as session:
+            yield session
+
+    @contextmanager
+    def read_session(self) -> Generator[Session, None, None]:
+        """
+        Provide a Neo4j session configured for read-only operations.
+
+        Uses ``READ_ACCESS`` so the driver can route to read replicas
+        in a clustered deployment.
+        """
+        self._ensure_open()
+        logger.debug(
+            "Opening Neo4j read session (database=%s).",
+            self._settings.neo4j_database,
+        )
+        with self._driver.session(
+            database=self._settings.neo4j_database,
+            default_access_mode=READ_ACCESS,
         ) as session:
             yield session
 
@@ -101,6 +131,9 @@ def create_neo4j_connection(settings: Settings) -> Neo4jConnection:
 
     Returns:
         A verified Neo4jConnection instance.
+
+    Raises:
+        DatabaseConnectionError: If connectivity verification fails.
     """
     connection = Neo4jConnection(settings)
     try:

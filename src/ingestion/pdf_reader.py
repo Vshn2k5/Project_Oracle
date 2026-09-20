@@ -1,7 +1,10 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 import pymupdf
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +88,8 @@ class PDFReader:
                 f"Expected a PDF file, received: {path.suffix or 'no extension'}"
             )
 
+        logger.info("Reading PDF document: %s", path)
+
         try:
             with pymupdf.open(path) as document:
                 pages = tuple(
@@ -96,9 +101,14 @@ class PDFReader:
                 )
 
         except (pymupdf.FileDataError, OSError, RuntimeError) as exc:
+            logger.error("Failed to read PDF document %s: %s", path, exc)
             raise PDFReaderError(
                 f"Failed to read PDF document: {path}"
             ) from exc
+
+        logger.info(
+            "Extracted %d pages from %s.", len(pages), path.name,
+        )
 
         return ExtractedDocument(
             source_path=path,
