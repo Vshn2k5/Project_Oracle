@@ -57,6 +57,11 @@ class Settings:
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimension: int = 384
 
+    # Retrieval Fusion Configuration
+    vector_weight: float = 0.5
+    keyword_weight: float = 0.2
+    graph_weight: float = 0.3
+
     @classmethod
     def from_environment(cls) -> "Settings":
         """
@@ -83,4 +88,7 @@ class Settings:
             llm_api_key=os.getenv("LLM_API_KEY", "").strip() or None,
             embedding_model=os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2").strip(),
             embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "384").strip()),
+            vector_weight=float(os.getenv("VECTOR_WEIGHT", "0.5").strip()),
+            keyword_weight=float(os.getenv("KEYWORD_WEIGHT", "0.2").strip()),
+            graph_weight=float(os.getenv("GRAPH_WEIGHT", "0.3").strip()),
         )

@@ -9,52 +9,57 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
+class QueryAnalysis:
+    """
+    Structured representation of a parsed user query.
+    """
+    original_query: str
+    normalized_query: str
+    query_type: str
+    entities: tuple[str, ...]
+    keywords: tuple[str, ...]
+    retrieval_intent: str
+
+
+@dataclass(frozen=True, slots=True)
 class RetrievedChunk:
     """
-    A single chunk returned by the retrieval system with provenance.
-
-    Attributes:
-        chunk_id: Graph identifier of the chunk.
-        text: The chunk text content.
-        page_number: Source page number.
-        document_id: Identifier of the source document.
-        document_title: Human-readable document title.
-        score: Relevance score assigned by the retriever.
+    A single chunk returned by the retrieval system with provenance and ranking signals.
     """
-
     chunk_id: str
     text: str
     page_number: int
     document_id: str
-    document_title: str
-    score: float
-
-
-@dataclass(frozen=True, slots=True)
-class GraphContext:
-    """
-    A snapshot of graph neighbourhood returned alongside retrieved chunks.
-
-    Attributes:
-        entities: Entities related to the retrieved chunks.
-        relationships: Relationships connecting those entities.
-    """
-
-    entities: tuple[dict[str, object], ...]
-    relationships: tuple[dict[str, object], ...]
+    source_path: str
+    
+    # Raw scores
+    vector_score_raw: float
+    keyword_score_raw: float
+    graph_score_raw: float
+    
+    # Normalized scores
+    vector_score_normalized: float
+    keyword_score_normalized: float
+    graph_score_normalized: float
+    
+    # Final fused score
+    final_score: float
+    
+    # Explanation
+    retrieval_sources: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class RetrievedContext:
     """
     The complete evidence package delivered to an agent.
-
-    Attributes:
-        query: The original user query.
-        chunks: Ranked chunks from hybrid retrieval.
-        graph_context: Relevant graph neighbourhood.
     """
-
     query: str
     chunks: tuple[RetrievedChunk, ...]
-    graph_context: GraphContext
+    entities: tuple[dict[str, object], ...]
+    relationships: tuple[dict[str, object], ...]
+    claims: tuple[dict[str, object], ...]
+    evidence: tuple[dict[str, object], ...]
+    sources: tuple[dict[str, object], ...]
+    retrieval_status: str
+

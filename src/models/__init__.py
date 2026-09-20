@@ -26,7 +26,7 @@ from src.models.knowledge_graph import (
     ExtractedRelationship,
 )
 from src.models.retrieval import (
-    GraphContext,
+    QueryAnalysis,
     RetrievedChunk,
     RetrievedContext,
 )
